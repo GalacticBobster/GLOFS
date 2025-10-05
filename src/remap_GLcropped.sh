@@ -1,16 +1,13 @@
 #!/bin/sh
-
-
 module load nco
 
 date
 
-
 # FVCOM output files
-output_erie="./nos.leofs.2022122213Z-2612Z.sfc.nc"
-output_mh="./nos.lmhofs.2022122213Z-2612Z.sfc.nc"
-output_sup="./nos.lsofs.2022122213Z-2612Z.sfc.nc"
-output_ont="./nos.loofs.2022122213Z-2612Z.sfc.nc"
+output_erie="./nos.leofs.stitched.sfc.nc"
+output_mh="./nos.lmhofs.stitched.sfc.nc"
+output_sup="./nos.lsofs.stitched.sfc.nc"
+output_ont="./nos.loofs.stitched.sfc.nc"
 
 
 #output_erie="./nos.leofs.2022122213Z-2612Z.sfc.nc"
@@ -89,9 +86,9 @@ python3 ./interp_skintemp_5lakes_ice_fv3grid_ver7_GLcropped.py $output_erie $out
 #python3 ./interp_skintemp_5lakes_ice_fv3grid_ver7.py $output_erie $output_mh $output_sup $output_ont > python.log
 
 cat python.log
-if [ "`tail -1 python.log`" != "interp_skintemp_5lakes_ice_fv3grid_ver7.py completed successfully" ]
+if [ "`tail -1 python.log`" != "interp_skintemp_5lakes_ice_fv3grid_ver7_GLcropped.py completed successfully" ]
 then
-   echo 'Problem with interp_skintemp_5lakes_ice_fv3grid_ver7.py - ABORT'
+   echo 'Problem with interp_skintemp_5lakes_ice_fv3grid_ver7_GLcropped.py - ABORT'
    date
    exit
 fi

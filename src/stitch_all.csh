@@ -1,6 +1,6 @@
 #!/bin/csh
 
-set ofsname = "lsofs"
+set ofsname = "lmhofs"
 set out_file = "nos.${ofsname}.stitched.sfc.nc"
 
 # Get all matching files

@@ -6,7 +6,7 @@ import subprocess
 base_date_str = "20221222"
 base_date = datetime.strptime(base_date_str, "%Y%m%d")
 
-end_date_str = "20221224"
+end_date_str = "20221226"
 end_date = datetime.strptime(end_date_str, "%Y%m%d")
 
 year = base_date.strftime("%Y")

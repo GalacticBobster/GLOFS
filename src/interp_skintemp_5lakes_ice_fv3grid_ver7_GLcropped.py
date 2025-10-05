@@ -12,10 +12,10 @@ missing_value = -99.9999
 
 # get input file
 argvs = sys.argv
-ncfile_fvcom_eri  = argvs[1]
-ncfile_fvcom_mhs  = argvs[2]
-ncfile_fvcom_sup  = argvs[3]
-ncfile_fvcom_ont  = argvs[4]
+ncfile_fvcom_eri  = 'nos.leofs.stitched.sfc.nc'#argvs[1]
+ncfile_fvcom_mhs  = 'nos.lmhofs.stitched.sfc.nc'#argvs[2]
+ncfile_fvcom_sup  = 'nos.lsofs.stitched.sfc.nc'#argvs[3]
+ncfile_fvcom_ont  = 'nos.loofs.stitched.sfc.nc'#argvs[4]
 
 # read "containar" file
 # this version reads a cropped grid file from the C3464 grid just for the Great Lakes region

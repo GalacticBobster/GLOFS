@@ -2,7 +2,7 @@
 
 set i=1
 
-foreach f (downloads/*nc)
+foreach f (../downloads/*nc)
 
 echo $i, $f
 

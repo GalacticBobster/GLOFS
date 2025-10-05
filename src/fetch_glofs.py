@@ -3,7 +3,7 @@ import requests
 from datetime import datetime, timedelta
 
 
-base_date_str = "20250101"
+base_date_str = "20240101"
 base_date = datetime.strptime(base_date_str, "%Y%m%d")
 
 year = base_date.strftime("%Y")
@@ -21,7 +21,7 @@ lake = "leofs"
 #https://www.ncei.noaa.gov/thredds/fileServer/model-leofs/2022/12/nos.leofs.fields.n006.20221231.t18z.nc
 
 for cycle in cycle_label:
-  for i in range(1,6):
+  for i in range(0,6):
   #for i in range(0,1):
    fname = f"{lake}.{cycle}.{year}{mon}{day}.fields.n00{i}.nc"
    url = f"https://www.ncei.noaa.gov/thredds/fileServer/{lakename}/{year}/{mon}/{fname}"
@@ -42,7 +42,7 @@ lakename = "model-lsofs-files"
 lake = "lsofs"
 
 for cycle in cycle_label:
-  for i in range(1,6):
+  for i in range(0,6):
   #for i in range(0,1):
    fname = f"{lake}.{cycle}.{year}{mon}{day}.fields.n00{i}.nc"
    url = f"https://www.ncei.noaa.gov/thredds/fileServer/{lakename}/{year}/{mon}/{fname}"
@@ -63,7 +63,7 @@ lakename = "model-lmhofs-files"
 lake = "lmhofs"
 
 for cycle in cycle_label:
-  for i in range(1,6):
+  for i in range(0,6):
   #for i in range(0,1):
    fname = f"{lake}.{cycle}.{year}{mon}{day}.fields.n00{i}.nc"
    url = f"https://www.ncei.noaa.gov/thredds/fileServer/{lakename}/{year}/{mon}/{fname}"
@@ -85,7 +85,7 @@ lakename = "model-loofs-files"
 lake = "loofs"
 
 for cycle in cycle_label:
-  for i in range(1,6):
+  for i in range(0,6):
   #for i in range(0,1):
    fname = f"{lake}.{cycle}.{year}{mon}{day}.fields.n00{i}.nc"
    url = f"https://www.ncei.noaa.gov/thredds/fileServer/{lakename}/{year}/{mon}/{fname}"
