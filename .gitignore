@@ -1,0 +1,6 @@
+# Ignore large model and NetCDF files
+*.nc
+*.grib
+*.grb
+*.bin
+*.hdf5
