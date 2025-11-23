@@ -90,26 +90,50 @@ class GLOFSDataPreprocessor:
     
     def extract_variable_timeseries(self, lake: str, variable: str,
                                    location: Optional[Tuple[int, int]] = None,
-                                   aggregation: str = "mean") -> pd.DataFrame:
+                                   aggregation: str = "mean",
+                                   vertical_level: Optional[int] = None) -> pd.DataFrame:
         """
         Extract time series for a specific variable across multiple files.
+        
+        For 3D variables (temp, salinity, u, v, ww):
+        - These have dimensions (time, siglay, node) where siglay is the vertical layer
+        - Use vertical_level=0 for surface-level data (recommended for LSTM models)
+        - Use aggregation="mean" without vertical_level to average across all vertical levels
+        - The method detects 3D variables by checking for 'siglay' or 'siglev' dimensions
+        
+        For 2D variables (zeta, ua, va):
+        - These have dimensions (time, node) - no vertical dimension
+        - vertical_level parameter is ignored
         
         Args:
             lake: Lake name (e.g., "leofs")
             variable: Variable name (e.g., "temp", "zeta", "u", "v")
-            location: Optional (x, y) location indices for spatial extraction
-            aggregation: Aggregation method if location not specified ("mean", "max", "min").
-                        For location-based extraction with multiple vertical levels, use "first" 
-                        to take the first level or "mean" to average across levels.
+            location: Optional (node_index,) or node index for spatial extraction.
+                     FVCOM uses unstructured mesh with node-based indexing.
+                     If not specified, spatial aggregation is performed.
+            aggregation: Spatial aggregation method ("mean", "max", "min").
+                        Special value "surface" is a convenience shorthand for
+                        vertical_level=0 + spatial mean aggregation (for 3D variables only).
+            vertical_level: Optional vertical level index for 3D variables.
+                           0 = surface (top layer), higher values = deeper layers.
+                           If specified, extracts only that vertical level before spatial aggregation.
+                           Takes precedence over aggregation="surface".
             
         Returns:
             DataFrame with time series data
         """
         # Validate aggregation parameter
-        valid_aggregations = ["mean", "max", "min", "first"]
+        valid_aggregations = ["mean", "max", "min", "surface"]
         if aggregation not in valid_aggregations:
             print(f"Warning: Invalid aggregation '{aggregation}'. Using 'mean' instead.")
             aggregation = "mean"
+        
+        # Handle "surface" as a convenience shorthand for vertical_level=0
+        # Note: "surface" is not a spatial aggregation method, but rather
+        # a convenient way to specify surface-level extraction for 3D variables
+        if aggregation == "surface":
+            vertical_level = 0
+            aggregation = "mean"  # Use mean for spatial aggregation
         
         files = self.list_files(lake=lake)
         
@@ -143,17 +167,62 @@ class GLOFSDataPreprocessor:
                 timestamp = date.replace(hour=hour) + pd.Timedelta(hours=step)
                 
                 # Extract variable data
-                var_data = ds[variable].values
+                var_data_obj = ds[variable]
+                var_data = var_data_obj.values
                 
-                # Handle different dimensions
-                if location is not None:
-                    # Extract at specific location
-                    if len(var_data.shape) >= 2:
-                        value = var_data[..., location[0], location[1]]
-                        if len(value.shape) > 0:
-                            # Handle multiple vertical levels
-                            value = value[0] if aggregation == "first" else np.mean(value)
+                # Check if this is a 3D variable by examining dimensions
+                # 3D variables have 'siglay' or 'siglev' dimension (vertical layers)
+                # 2D variables only have 'node' or spatial dimensions
+                var_dims = var_data_obj.dims if hasattr(var_data_obj, 'dims') else []
+                is_3d = 'siglay' in var_dims or 'siglev' in var_dims
+                
+                # Extract surface level for 3D variables if specified
+                if vertical_level is not None and is_3d:
+                    # Find the vertical dimension index
+                    if 'siglay' in var_dims:
+                        vert_dim_idx = var_dims.index('siglay')
+                    elif 'siglev' in var_dims:
+                        vert_dim_idx = var_dims.index('siglev')
                     else:
+                        # This shouldn't happen if is_3d is True, but handle it
+                        print(f"Warning: Variable {variable} detected as 3D but missing vertical dimension. Skipping vertical extraction.")
+                        vertical_level = None  # Skip vertical extraction
+                
+                    if vertical_level is not None:
+                        # Extract specific vertical level (0 = surface)
+                        if vertical_level < var_data.shape[vert_dim_idx]:
+                            # Use numpy's take to extract along the correct axis
+                            var_data = np.take(var_data, vertical_level, axis=vert_dim_idx)
+                        else:
+                            print(f"Warning: vertical_level {vertical_level} exceeds available levels {var_data.shape[vert_dim_idx]}. Using surface level.")
+                            var_data = np.take(var_data, 0, axis=vert_dim_idx)
+                
+                # Handle different dimensions for location-based extraction
+                if location is not None:
+                    # Convert location to node index if it's a tuple
+                    node_idx = location[0] if isinstance(location, (tuple, list)) else location
+                    
+                    # After vertical level extraction, 3D becomes 2D: (node,)
+                    # 2D variables are already: (node,)
+                    if len(var_data.shape) == 1:
+                        # 1D array (node dimension only)
+                        if node_idx < len(var_data):
+                            value = var_data[node_idx]
+                        else:
+                            print(f"Warning: location index {node_idx} exceeds array size {len(var_data)}. Using spatial mean instead.")
+                            value = np.nanmean(var_data)
+                    elif len(var_data.shape) >= 2:
+                        # Multi-dimensional - still has vertical or time dimensions
+                        # This happens if vertical_level wasn't specified for a 3D variable
+                        # Take mean over all non-spatial dimensions, then extract location
+                        var_data_flat = np.nanmean(var_data, axis=tuple(range(len(var_data.shape) - 1)))
+                        if node_idx < len(var_data_flat):
+                            value = var_data_flat[node_idx]
+                        else:
+                            print(f"Warning: location index {node_idx} exceeds array size. Using spatial mean instead.")
+                            value = np.nanmean(var_data)
+                    else:
+                        # Scalar value
                         value = var_data
                 else:
                     # Aggregate over spatial dimensions
@@ -185,9 +254,43 @@ class GLOFSDataPreprocessor:
         
         return df
     
+    def extract_surface_temperature(self, lake: str,
+                                    location: Optional[Tuple[int, int]] = None,
+                                    aggregation: str = "mean") -> pd.DataFrame:
+        """
+        Convenience method to extract surface-level temperature for LSTM models.
+        
+        This extracts the surface layer (vertical_level=0) from the 3D temperature data,
+        which is the recommended approach for training LSTM models on lake surface conditions.
+        
+        Args:
+            lake: Lake name (e.g., "leofs" for Lake Erie, "lsofs" for Lake Superior)
+            location: Optional node index for spatial extraction (single value or tuple).
+                     If not provided, spatial aggregation is performed.
+            aggregation: Spatial aggregation method ("mean", "max", "min")
+            
+        Returns:
+            DataFrame with surface temperature time series
+            
+        Examples:
+            >>> preprocessor = GLOFSDataPreprocessor()
+            >>> # Extract spatially-averaged surface temperature
+            >>> df = preprocessor.extract_surface_temperature("leofs", aggregation="mean")
+            >>> # Extract surface temperature at a specific node
+            >>> df = preprocessor.extract_surface_temperature("leofs", location=100)
+        """
+        return self.extract_variable_timeseries(
+            lake=lake,
+            variable="temp",
+            location=location,
+            aggregation=aggregation,
+            vertical_level=0
+        )
+    
     def extract_multiple_variables(self, lake: str, variables: List[str],
                                    location: Optional[Tuple[int, int]] = None,
-                                   aggregation: str = "mean") -> pd.DataFrame:
+                                   aggregation: str = "mean",
+                                   vertical_level: Optional[int] = None) -> pd.DataFrame:
         """
         Extract time series for multiple variables.
         
@@ -196,6 +299,7 @@ class GLOFSDataPreprocessor:
             variables: List of variable names
             location: Optional (x, y) location indices
             aggregation: Aggregation method
+            vertical_level: Optional vertical level index for 3D variables (0=surface)
             
         Returns:
             DataFrame with time series for all variables
@@ -203,7 +307,9 @@ class GLOFSDataPreprocessor:
         dfs = []
         
         for var in variables:
-            df = self.extract_variable_timeseries(lake, var, location, aggregation)
+            df = self.extract_variable_timeseries(
+                lake, var, location, aggregation, vertical_level
+            )
             if not df.empty:
                 dfs.append(df)
         

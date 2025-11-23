@@ -32,7 +32,8 @@ def run_complete_workflow(
     sequence_length: int = 24,
     lstm_units: list = None,
     epochs: int = 100,
-    batch_size: int = 32
+    batch_size: int = 32,
+    surface_level: bool = False
 ):
     """
     Run the complete workflow from data fetching to model training.
@@ -48,6 +49,7 @@ def run_complete_workflow(
         lstm_units: List of LSTM units per layer
         epochs: Number of training epochs
         batch_size: Batch size for training
+        surface_level: Extract surface level (vertical_level=0) for 3D variables (temp, u, v, salinity)
     """
     if lstm_units is None:
         lstm_units = [50, 50]
@@ -115,10 +117,24 @@ def run_complete_workflow(
     
     # Extract time series
     print(f"\nExtracting time series for variable: {variable}")
+    
+    # Determine vertical level for 3D variables
+    vertical_level = 0 if surface_level else None
+    level_desc = "surface-level (vertical_level=0)" if surface_level else "depth-averaged"
+    
+    print(f"Extraction mode: {level_desc}")
+    if surface_level:
+        print("  - Extracting surface layer for 3D variables (temp, u, v, salinity)")
+        print("  - 2D variables (zeta, ua, va) unaffected by vertical_level")
+    
+    # Note: For 3D variables (temp, salinity, u, v, ww), vertical_level=0 extracts
+    # surface-level data (recommended for LSTM). vertical_level=None averages all levels.
+    # For 2D variables (zeta, ua, va), vertical_level is ignored.
     df = preprocessor.extract_variable_timeseries(
         lake=lake,
         variable=variable,
-        aggregation="mean"
+        aggregation="mean",
+        vertical_level=vertical_level
     )
     
     if df.empty:
@@ -214,14 +230,19 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Fetch data and train model for Lake Erie (leofs) temperature
-  python example_lstm_workflow.py --start-date 20240101 --end-date 20240107 --lake leofs --variable temp
+  # Fetch data and train model for Lake Erie (LEOFS) surface temperature (recommended)
+  python example_lstm_workflow.py --start-date 20240101 --end-date 20240107 --lake leofs --variable temp --surface-level
   
-  # Train with custom LSTM architecture
-  python example_lstm_workflow.py --start-date 20240101 --end-date 20240107 --lake lsofs --lstm-units 64 64 32
+  # Train with custom LSTM architecture using surface data
+  python example_lstm_workflow.py --start-date 20240101 --end-date 20240107 --lake lsofs --lstm-units 64 64 32 --surface-level
   
   # Quick test with fewer epochs
-  python example_lstm_workflow.py --start-date 20240101 --end-date 20240103 --lake leofs --epochs 10
+  python example_lstm_workflow.py --start-date 20240101 --end-date 20240103 --lake leofs --epochs 10 --surface-level
+  
+  # Depth-averaged temperature (without --surface-level flag)
+  python example_lstm_workflow.py --start-date 20240101 --end-date 20240107 --lake leofs --variable temp
+  
+Note: Lake abbreviations: leofs=Lake Erie, lsofs=Lake Superior, lmhofs=Lake Michigan-Huron, loofs=Lake Ontario
         """
     )
     
@@ -287,6 +308,11 @@ Examples:
         default=32,
         help="Batch size for training (default: 32)"
     )
+    parser.add_argument(
+        "--surface-level",
+        action="store_true",
+        help="Extract surface level (vertical_level=0) for 3D variables like temp, u, v. Recommended for LSTM models."
+    )
     
     args = parser.parse_args()
     
@@ -301,7 +327,8 @@ Examples:
         sequence_length=args.sequence_length,
         lstm_units=args.lstm_units,
         epochs=args.epochs,
-        batch_size=args.batch_size
+        batch_size=args.batch_size,
+        surface_level=args.surface_level
     )
 
 

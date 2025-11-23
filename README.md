@@ -7,7 +7,7 @@ This repository contains tools for working with Great Lakes Operational Forecast
 
 - **Data Fetching**: Download GLOFS data from NOAA archives (NCEI and AWS S3)
 - **Data Processing**: Extract and preprocess lake variables from NetCDF files
-- **Machine Learning**: Train LSTM models for lake variable prediction
+- **Machine Learning**: Train LSTM models for lake variable prediction with surface-level data extraction
 - **Grid Remapping**: Remap FVCOM data to FV3 grid
 
 ## Quick Start
@@ -21,15 +21,18 @@ pip install -r requirements.txt
 # Run quick start examples
 python quick_start_examples.py
 
-# Or run the complete workflow
+# Or run the complete workflow with surface-level extraction
 python src/example_lstm_workflow.py \
     --start-date 20240101 \
     --end-date 20240107 \
     --lake leofs \
-    --variable temp
+    --variable temp \
+    --surface-level
 ```
 
-See [src/README_LSTM.md](src/README_LSTM.md) for detailed documentation on the LSTM functionality.
+**Documentation:**
+- [LSTM Variables Guide](LSTM_VARIABLES_GUIDE.md) - **NEW!** How to extract surface-level data from 3D lakes for LSTM
+- [src/README_LSTM.md](src/README_LSTM.md) - Detailed LSTM functionality documentation
 
 ## Repository Structure
 
@@ -78,6 +81,7 @@ pip install -r requirements.txt
 
 ## Documentation
 
+- **[LSTM Variables Guide](LSTM_VARIABLES_GUIDE.md)** - How to extract surface-level data from 3D lakes for LSTM models
 - [LSTM Model Documentation](src/README_LSTM.md) - Comprehensive guide for LSTM functionality
 - See individual script files for specific usage instructions
 
