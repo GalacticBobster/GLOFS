@@ -192,6 +192,64 @@ def example_4_prepare_for_lstm():
     print("Then use the train_lstm_model function from lake_lstm_model.py")
 
 
+def example_5_inspect_node_coordinates():
+    """Example 5: Inspect node coordinates for mapping."""
+    print("\n" + "="*60)
+    print("EXAMPLE 5: Inspect Node Coordinates")
+    print("="*60)
+    
+    preprocessor = GLOFSDataPreprocessor(data_dir="./downloads")
+    
+    files = preprocessor.list_files(lake="leofs")
+    
+    if not files:
+        print("\nNo files found. Run Example 1 first to download data.")
+        return
+    
+    print("\nInspecting node coordinates for Lake Erie (LEOFS)...")
+    
+    # Get node summary
+    node_summary = preprocessor.inspect_nodes(lake="leofs", output_format="summary")
+    
+    if not node_summary:
+        print("Could not load node coordinates.")
+        return
+    
+    print(f"\nNode coordinate summary:")
+    print(f"  Total nodes: {node_summary['num_nodes']:,}")
+    print(f"  Latitude range: {node_summary['latitude_range'][0]:.4f}°N to {node_summary['latitude_range'][1]:.4f}°N")
+    print(f"  Longitude range: {node_summary['longitude_range'][0]:.4f}°E to {node_summary['longitude_range'][1]:.4f}°E")
+    
+    # Inspect a specific node
+    print("\nInspecting node #100:")
+    node_info = preprocessor.get_node_info(lake="leofs", node_index=100, include_sample_data=True)
+    
+    if node_info:
+        print(f"  Latitude: {node_info['latitude']:.6f}°N")
+        print(f"  Longitude: {node_info['longitude']:.6f}°E")
+        if 'sample_data' in node_info and node_info['sample_data']:
+            print(f"  Sample data:")
+            for var, val in list(node_info['sample_data'].items())[:3]:
+                print(f"    {var}: {val:.4f}")
+    
+    # Find nodes in a region
+    print("\nFinding nodes in central Lake Erie (41.5°N-42.5°N, -81.5°W to -80.5°W):")
+    region_result = preprocessor.find_nodes_in_region(
+        lake="leofs",
+        lat_min=41.5, lat_max=42.5,
+        lon_min=-81.5, lon_max=-80.5
+    )
+    
+    if region_result:
+        print(f"  Found {region_result['num_nodes_in_region']} nodes in this region")
+        if region_result['num_nodes_in_region'] > 0:
+            print(f"  First 3 nodes:")
+            for node in region_result['node_coordinates'][:3]:
+                print(f"    Node {node['node_index']}: ({node['lat']:.4f}°N, {node['lon']:.4f}°E)")
+    
+    print("\nFor more detailed node inspection, use: python inspect_node_coordinates.py --help")
+
+
 def main():
     """Run all examples."""
     print("\n" + "#"*60)
@@ -203,8 +261,8 @@ def main():
     parser.add_argument(
         "--example",
         type=int,
-        choices=[1, 2, 3, 4],
-        help="Run specific example (1-4). If not specified, runs all."
+        choices=[1, 2, 3, 4, 5],
+        help="Run specific example (1-5). If not specified, runs all."
     )
     args = parser.parse_args()
     
@@ -221,6 +279,9 @@ def main():
         if args.example == 4 or args.example is None:
             example_4_prepare_for_lstm()
         
+        if args.example == 5 or args.example is None:
+            example_5_inspect_node_coordinates()
+        
         print("\n" + "#"*60)
         print("# Examples completed!")
         print("#"*60)
@@ -229,6 +290,7 @@ def main():
         print("  2. Check the CSV output files")
         print("  3. Install TensorFlow for LSTM training: pip install tensorflow")
         print("  4. Run the full workflow: python src/example_lstm_workflow.py --help")
+        print("  5. Inspect node coordinates: python inspect_node_coordinates.py --help")
         
     except KeyboardInterrupt:
         print("\n\nInterrupted by user.")

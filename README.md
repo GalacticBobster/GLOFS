@@ -31,7 +31,8 @@ python src/example_lstm_workflow.py \
 ```
 
 **Documentation:**
-- [LSTM Variables Guide](LSTM_VARIABLES_GUIDE.md) - **NEW!** How to extract surface-level data from 3D lakes for LSTM
+- [Node Coordinates Guide](NODE_COORDINATES_GUIDE.md) - **NEW!** Inspect node lat/lon coordinates for mapping
+- [LSTM Variables Guide](LSTM_VARIABLES_GUIDE.md) - How to extract surface-level data from 3D lakes for LSTM
 - [src/README_LSTM.md](src/README_LSTM.md) - Detailed LSTM functionality documentation
 
 ## Repository Structure
@@ -42,11 +43,12 @@ python src/example_lstm_workflow.py \
 - `boto3_glofs.py` - Fetch data from AWS S3 using boto3 (single day)
 - `fetch_RAP.py` - Fetch all RAP forecast data from AWS
 
-### Data Processing & ML (NEW!)
+### Data Processing & ML
 - `lake_data_preprocessor.py` - Extract and preprocess lake variables from NetCDF files
 - `lake_lstm_model.py` - LSTM neural network for time series prediction
 - `example_lstm_workflow.py` - Complete end-to-end workflow example
 - `quick_start_examples.py` - Quick start guide with examples
+- `inspect_node_coordinates.py` - **NEW!** Inspect node lat/lon coordinates for mapping
 
 ### Grid Remapping Scripts
 - `sfc_extract.csh` - Extract only the surface layer from FVCOM data
@@ -54,6 +56,12 @@ python src/example_lstm_workflow.py \
 - `interp_skintemp_5lakes_ice_fv3grid_ver7_GLcropped.py` - Combine all Great Lakes mask files and stitch them together
 
 ## Features
+
+### Node Coordinate Inspection (NEW!)
+- Extract latitude/longitude coordinates for all nodes
+- Find nodes within geographic regions
+- Inspect specific node locations
+- Export coordinates to CSV for mapping/GIS
 
 ### Multi-Day Data Fetching
 - Download GLOFS data for date ranges
@@ -81,6 +89,7 @@ pip install -r requirements.txt
 
 ## Documentation
 
+- **[Node Coordinates Guide](NODE_COORDINATES_GUIDE.md)** - Inspect node lat/lon coordinates for mapping and geographic analysis
 - **[LSTM Variables Guide](LSTM_VARIABLES_GUIDE.md)** - How to extract surface-level data from 3D lakes for LSTM models
 - [LSTM Model Documentation](src/README_LSTM.md) - Comprehensive guide for LSTM functionality
 - See individual script files for specific usage instructions
