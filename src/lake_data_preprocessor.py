@@ -111,11 +111,13 @@ class GLOFSDataPreprocessor:
             location: Optional (node_index,) or node index for spatial extraction.
                      FVCOM uses unstructured mesh with node-based indexing.
                      If not specified, spatial aggregation is performed.
-            aggregation: Aggregation method ("mean", "max", "min", "surface").
-                        "surface" is equivalent to vertical_level=0 for 3D variables.
+            aggregation: Spatial aggregation method ("mean", "max", "min").
+                        Special value "surface" is a convenience shorthand for
+                        vertical_level=0 + spatial mean aggregation (for 3D variables only).
             vertical_level: Optional vertical level index for 3D variables.
                            0 = surface (top layer), higher values = deeper layers.
                            If specified, extracts only that vertical level before spatial aggregation.
+                           Takes precedence over aggregation="surface".
             
         Returns:
             DataFrame with time series data
@@ -126,7 +128,9 @@ class GLOFSDataPreprocessor:
             print(f"Warning: Invalid aggregation '{aggregation}'. Using 'mean' instead.")
             aggregation = "mean"
         
-        # Handle "surface" aggregation as vertical_level=0
+        # Handle "surface" as a convenience shorthand for vertical_level=0
+        # Note: "surface" is not a spatial aggregation method, but rather
+        # a convenient way to specify surface-level extraction for 3D variables
         if aggregation == "surface":
             vertical_level = 0
             aggregation = "mean"  # Use mean for spatial aggregation
@@ -180,15 +184,18 @@ class GLOFSDataPreprocessor:
                     elif 'siglev' in var_dims:
                         vert_dim_idx = var_dims.index('siglev')
                     else:
-                        vert_dim_idx = 0  # Fallback
-                    
-                    # Extract specific vertical level (0 = surface)
-                    if vertical_level < var_data.shape[vert_dim_idx]:
-                        # Use numpy's take to extract along the correct axis
-                        var_data = np.take(var_data, vertical_level, axis=vert_dim_idx)
-                    else:
-                        print(f"Warning: vertical_level {vertical_level} exceeds available levels {var_data.shape[vert_dim_idx]}. Using surface level.")
-                        var_data = np.take(var_data, 0, axis=vert_dim_idx)
+                        # This shouldn't happen if is_3d is True, but handle it
+                        print(f"Warning: Variable {variable} detected as 3D but missing vertical dimension. Skipping vertical extraction.")
+                        vertical_level = None  # Skip vertical extraction
+                
+                    if vertical_level is not None:
+                        # Extract specific vertical level (0 = surface)
+                        if vertical_level < var_data.shape[vert_dim_idx]:
+                            # Use numpy's take to extract along the correct axis
+                            var_data = np.take(var_data, vertical_level, axis=vert_dim_idx)
+                        else:
+                            print(f"Warning: vertical_level {vertical_level} exceeds available levels {var_data.shape[vert_dim_idx]}. Using surface level.")
+                            var_data = np.take(var_data, 0, axis=vert_dim_idx)
                 
                 # Handle different dimensions for location-based extraction
                 if location is not None:
@@ -257,17 +264,20 @@ class GLOFSDataPreprocessor:
         which is the recommended approach for training LSTM models on lake surface conditions.
         
         Args:
-            lake: Lake name (e.g., "leofs")
-            location: Optional (x, y) location indices for spatial extraction
+            lake: Lake name (e.g., "leofs" for Lake Erie, "lsofs" for Lake Superior)
+            location: Optional node index for spatial extraction (single value or tuple).
+                     If not provided, spatial aggregation is performed.
             aggregation: Spatial aggregation method ("mean", "max", "min")
             
         Returns:
             DataFrame with surface temperature time series
             
-        Example:
+        Examples:
             >>> preprocessor = GLOFSDataPreprocessor()
+            >>> # Extract spatially-averaged surface temperature
             >>> df = preprocessor.extract_surface_temperature("leofs", aggregation="mean")
-            >>> # Returns spatially-averaged surface temperature over time
+            >>> # Extract surface temperature at a specific node
+            >>> df = preprocessor.extract_surface_temperature("leofs", location=100)
         """
         return self.extract_variable_timeseries(
             lake=lake,

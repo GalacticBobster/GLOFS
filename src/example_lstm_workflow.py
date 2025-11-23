@@ -230,7 +230,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Fetch data and train model for Lake Erie surface temperature (recommended)
+  # Fetch data and train model for Lake Erie (LEOFS) surface temperature (recommended)
   python example_lstm_workflow.py --start-date 20240101 --end-date 20240107 --lake leofs --variable temp --surface-level
   
   # Train with custom LSTM architecture using surface data
@@ -241,6 +241,8 @@ Examples:
   
   # Depth-averaged temperature (without --surface-level flag)
   python example_lstm_workflow.py --start-date 20240101 --end-date 20240107 --lake leofs --variable temp
+  
+Note: Lake abbreviations: leofs=Lake Erie, lsofs=Lake Superior, lmhofs=Lake Michigan-Huron, loofs=Lake Ontario
         """
     )
     
