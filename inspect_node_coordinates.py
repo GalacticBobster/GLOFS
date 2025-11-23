@@ -23,6 +23,16 @@ from lake_data_preprocessor import GLOFSDataPreprocessor
 import pandas as pd
 
 
+def format_lon(lon: float) -> str:
+    """Format longitude for Western Hemisphere (Great Lakes use negative values = West)."""
+    return f"{abs(lon):.4f}°W" if lon < 0 else f"{lon:.4f}°E"
+
+
+def format_lon_precise(lon: float) -> str:
+    """Format longitude with more precision."""
+    return f"{abs(lon):.6f}°W" if lon < 0 else f"{lon:.6f}°E"
+
+
 def inspect_lake_nodes(lake: str, data_dir: str = "./downloads"):
     """
     Display summary of node coordinates for a lake.
@@ -49,7 +59,7 @@ def inspect_lake_nodes(lake: str, data_dir: str = "./downloads"):
     print(f"Total nodes: {node_summary['num_nodes']:,}")
     print(f"\nGeographic extent:")
     print(f"  Latitude:  {node_summary['latitude_range'][0]:.4f}°N to {node_summary['latitude_range'][1]:.4f}°N")
-    print(f"  Longitude: {node_summary['longitude_range'][0]:.4f}°E to {node_summary['longitude_range'][1]:.4f}°E")
+    print(f"  Longitude: {format_lon(node_summary['longitude_range'][0])} to {format_lon(node_summary['longitude_range'][1])}")
     print(f"\nSource file: {os.path.basename(node_summary['source_file'])}")
     
     return node_summary
@@ -84,7 +94,7 @@ def inspect_specific_node(lake: str, node_index: int,
     
     print(f"\nNode index: {node_info['node_index']}")
     print(f"Latitude:   {node_info['latitude']:.6f}°N")
-    print(f"Longitude:  {node_info['longitude']:.6f}°E")
+    print(f"Longitude:  {format_lon_precise(node_info['longitude'])}")
     
     if include_data and 'sample_data' in node_info:
         print(f"\nSample data from first available file:")
@@ -127,16 +137,16 @@ def find_nodes_in_region(lake: str, lat_min: float, lat_max: float,
     
     print(f"\nRegion bounds:")
     print(f"  Latitude:  {lat_min:.4f}°N to {lat_max:.4f}°N")
-    print(f"  Longitude: {lon_min:.4f}°E to {lon_max:.4f}°E")
+    print(f"  Longitude: {format_lon(lon_min)} to {format_lon(lon_max)}")
     print(f"\nNodes found: {result['num_nodes_in_region']:,}")
     
     if result['num_nodes_in_region'] > 0:
         display_count = min(max_display, result['num_nodes_in_region'])
         print(f"\nFirst {display_count} nodes:")
-        print(f"{'Index':>8s}  {'Latitude':>10s}  {'Longitude':>10s}")
-        print("-" * 34)
+        print(f"{'Index':>8s}  {'Latitude':>10s}  {'Longitude':>12s}")
+        print("-" * 36)
         for node in result['node_coordinates'][:display_count]:
-            print(f"{node['node_index']:8d}  {node['lat']:10.4f}  {node['lon']:10.4f}")
+            print(f"{node['node_index']:8d}  {node['lat']:10.4f}  {format_lon(node['lon']):>12s}")
         
         if result['num_nodes_in_region'] > max_display:
             print(f"... and {result['num_nodes_in_region'] - max_display} more nodes")

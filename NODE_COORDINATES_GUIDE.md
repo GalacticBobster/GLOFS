@@ -180,12 +180,12 @@ Typical coordinate ranges for each lake:
 
 | Lake | Abbreviation | Latitude Range | Longitude Range |
 |------|--------------|----------------|-----------------|
-| Lake Erie | leofs | ~41.3°N - 42.9°N | ~-83.5°E - -78.8°E |
-| Lake Superior | lsofs | ~46.4°N - 49.0°N | ~-92.1°E - -84.5°E |
-| Lake Michigan-Huron | lmhofs | ~41.6°N - 46.0°N | ~-87.9°E - -79.8°E |
-| Lake Ontario | loofs | ~43.2°N - 44.3°N | ~-79.8°E - -76.0°E |
+| Lake Erie | leofs | ~41.3°N - 42.9°N | ~83.5°W - 78.8°W |
+| Lake Superior | lsofs | ~46.4°N - 49.0°N | ~92.1°W - 84.5°W |
+| Lake Michigan-Huron | lmhofs | ~41.6°N - 46.0°N | ~87.9°W - 79.8°W |
+| Lake Ontario | loofs | ~43.2°N - 44.3°N | ~79.8°W - 76.0°W |
 
-Note: Actual ranges depend on the specific FVCOM mesh used.
+Note: Actual ranges depend on the specific FVCOM mesh used. Coordinates are stored as negative values (Western Hemisphere) in the NetCDF files.
 
 ## Understanding FVCOM Mesh
 

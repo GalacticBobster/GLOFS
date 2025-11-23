@@ -215,10 +215,14 @@ def example_5_inspect_node_coordinates():
         print("Could not load node coordinates.")
         return
     
+    # Helper to format longitude for Western Hemisphere
+    def format_lon(lon):
+        return f"{abs(lon):.4f}°W" if lon < 0 else f"{lon:.4f}°E"
+    
     print(f"\nNode coordinate summary:")
     print(f"  Total nodes: {node_summary['num_nodes']:,}")
     print(f"  Latitude range: {node_summary['latitude_range'][0]:.4f}°N to {node_summary['latitude_range'][1]:.4f}°N")
-    print(f"  Longitude range: {node_summary['longitude_range'][0]:.4f}°E to {node_summary['longitude_range'][1]:.4f}°E")
+    print(f"  Longitude range: {format_lon(node_summary['longitude_range'][0])} to {format_lon(node_summary['longitude_range'][1])}")
     
     # Inspect a specific node
     print("\nInspecting node #100:")
@@ -226,7 +230,7 @@ def example_5_inspect_node_coordinates():
     
     if node_info:
         print(f"  Latitude: {node_info['latitude']:.6f}°N")
-        print(f"  Longitude: {node_info['longitude']:.6f}°E")
+        print(f"  Longitude: {format_lon(node_info['longitude'])}")
         if 'sample_data' in node_info and node_info['sample_data']:
             print(f"  Sample data:")
             for var, val in list(node_info['sample_data'].items())[:3]:
@@ -245,7 +249,7 @@ def example_5_inspect_node_coordinates():
         if region_result['num_nodes_in_region'] > 0:
             print(f"  First 3 nodes:")
             for node in region_result['node_coordinates'][:3]:
-                print(f"    Node {node['node_index']}: ({node['lat']:.4f}°N, {node['lon']:.4f}°E)")
+                print(f"    Node {node['node_index']}: ({node['lat']:.4f}°N, {format_lon(node['lon'])})")
     
     print("\nFor more detailed node inspection, use: python inspect_node_coordinates.py --help")
 
