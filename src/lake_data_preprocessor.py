@@ -98,8 +98,8 @@ class GLOFSDataPreprocessor:
         For 3D variables (temp, salinity, u, v, ww):
         - These have dimensions (time, siglay, node) where siglay is the vertical layer
         - Use vertical_level=0 for surface-level data (recommended for LSTM models)
-        - Use aggregation="mean" to average across all vertical levels
-        - Without vertical_level, all data is aggregated spatially
+        - Use aggregation="mean" without vertical_level to average across all vertical levels
+        - The method detects 3D variables by checking for 'siglay' or 'siglev' dimensions
         
         For 2D variables (zeta, ua, va):
         - These have dimensions (time, node) - no vertical dimension
@@ -108,12 +108,14 @@ class GLOFSDataPreprocessor:
         Args:
             lake: Lake name (e.g., "leofs")
             variable: Variable name (e.g., "temp", "zeta", "u", "v")
-            location: Optional (x, y) location indices for spatial extraction
+            location: Optional (node_index,) or node index for spatial extraction.
+                     FVCOM uses unstructured mesh with node-based indexing.
+                     If not specified, spatial aggregation is performed.
             aggregation: Aggregation method ("mean", "max", "min", "surface").
                         "surface" is equivalent to vertical_level=0 for 3D variables.
             vertical_level: Optional vertical level index for 3D variables.
                            0 = surface (top layer), higher values = deeper layers.
-                           If specified, overrides aggregation for vertical dimension.
+                           If specified, extracts only that vertical level before spatial aggregation.
             
         Returns:
             DataFrame with time series data
@@ -161,35 +163,59 @@ class GLOFSDataPreprocessor:
                 timestamp = date.replace(hour=hour) + pd.Timedelta(hours=step)
                 
                 # Extract variable data
-                var_data = ds[variable].values
+                var_data_obj = ds[variable]
+                var_data = var_data_obj.values
                 
-                # Check if this is a 3D variable (has vertical dimension)
-                # 3D variables have shape (siglay, node) or (time, siglay, node) if time dim included
-                # 2D variables have shape (node,) or (time, node) if time dim included
-                is_3d = len(var_data.shape) >= 2 and var_data.shape[0] > 1
+                # Check if this is a 3D variable by examining dimensions
+                # 3D variables have 'siglay' or 'siglev' dimension (vertical layers)
+                # 2D variables only have 'node' or spatial dimensions
+                var_dims = var_data_obj.dims if hasattr(var_data_obj, 'dims') else []
+                is_3d = 'siglay' in var_dims or 'siglev' in var_dims
                 
                 # Extract surface level for 3D variables if specified
                 if vertical_level is not None and is_3d:
+                    # Find the vertical dimension index
+                    if 'siglay' in var_dims:
+                        vert_dim_idx = var_dims.index('siglay')
+                    elif 'siglev' in var_dims:
+                        vert_dim_idx = var_dims.index('siglev')
+                    else:
+                        vert_dim_idx = 0  # Fallback
+                    
                     # Extract specific vertical level (0 = surface)
-                    if vertical_level < var_data.shape[0]:
-                        var_data = var_data[vertical_level, :]
+                    if vertical_level < var_data.shape[vert_dim_idx]:
+                        # Use numpy's take to extract along the correct axis
+                        var_data = np.take(var_data, vertical_level, axis=vert_dim_idx)
                     else:
-                        print(f"Warning: vertical_level {vertical_level} exceeds available levels {var_data.shape[0]}. Using surface level.")
-                        var_data = var_data[0, :]
+                        print(f"Warning: vertical_level {vertical_level} exceeds available levels {var_data.shape[vert_dim_idx]}. Using surface level.")
+                        var_data = np.take(var_data, 0, axis=vert_dim_idx)
                 
-                # Handle different dimensions
+                # Handle different dimensions for location-based extraction
                 if location is not None:
-                    # Extract at specific location
-                    if len(var_data.shape) >= 2:
-                        # Still 3D after potential level extraction (shouldn't happen with vertical_level set)
-                        value = var_data[..., location[0], location[1]]
-                        if len(value.shape) > 0:
-                            # Handle multiple vertical levels - take surface
-                            value = value[0]
-                    elif len(var_data.shape) == 1:
-                        # 1D array (single level)
-                        value = var_data[location[0]] if len(var_data) > location[0] else var_data[0]
+                    # Convert location to node index if it's a tuple
+                    node_idx = location[0] if isinstance(location, (tuple, list)) else location
+                    
+                    # After vertical level extraction, 3D becomes 2D: (node,)
+                    # 2D variables are already: (node,)
+                    if len(var_data.shape) == 1:
+                        # 1D array (node dimension only)
+                        if node_idx < len(var_data):
+                            value = var_data[node_idx]
+                        else:
+                            print(f"Warning: location index {node_idx} exceeds array size {len(var_data)}. Using spatial mean instead.")
+                            value = np.nanmean(var_data)
+                    elif len(var_data.shape) >= 2:
+                        # Multi-dimensional - still has vertical or time dimensions
+                        # This happens if vertical_level wasn't specified for a 3D variable
+                        # Take mean over all non-spatial dimensions, then extract location
+                        var_data_flat = np.nanmean(var_data, axis=tuple(range(len(var_data.shape) - 1)))
+                        if node_idx < len(var_data_flat):
+                            value = var_data_flat[node_idx]
+                        else:
+                            print(f"Warning: location index {node_idx} exceeds array size. Using spatial mean instead.")
+                            value = np.nanmean(var_data)
                     else:
+                        # Scalar value
                         value = var_data
                 else:
                     # Aggregate over spatial dimensions
