@@ -193,7 +193,9 @@ class GLOFSDataPreprocessor:
         lon = coord_info['lon']
         
         # Find nodes in the specified region
-        mask = (lat >= lat_min) & (lat <= lat_max) & (lon >= lon_min) & (lon <= lon_max)
+        # Filter out NaN values to avoid issues with comparison
+        valid_coords = np.isfinite(lat) & np.isfinite(lon)
+        mask = valid_coords & (lat >= lat_min) & (lat <= lat_max) & (lon >= lon_min) & (lon <= lon_max)
         node_indices = np.where(mask)[0]
         
         result = {
