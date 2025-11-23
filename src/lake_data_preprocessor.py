@@ -247,7 +247,7 @@ class GLOFSDataPreprocessor:
         # Handle missing values
         if np.isnan(data).any():
             print("Warning: NaN values detected. Filling with forward fill and mean.")
-            df_clean = df[all_features].fillna(method='ffill').fillna(df[all_features].mean())
+            df_clean = df[all_features].ffill().fillna(df[all_features].mean())
             data = df_clean.values
         
         # Scale data
