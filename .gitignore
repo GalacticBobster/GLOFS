@@ -4,3 +4,19 @@
 *.grb
 *.bin
 *.hdf5
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Output directories
+downloads/
+output/
