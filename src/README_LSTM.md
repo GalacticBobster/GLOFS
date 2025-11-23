@@ -124,14 +124,28 @@ print(f"Test R²: {metrics['r2']:.4f}")
 Run the entire workflow from data fetching to model training:
 
 ```bash
-# Basic usage - fetch 7 days and train model
+# Basic usage - fetch 7 days and train model with surface temperature (recommended)
 python src/example_lstm_workflow.py \
     --start-date 20240101 \
     --end-date 20240107 \
     --lake leofs \
-    --variable temp
+    --variable temp \
+    --surface-level
 
-# Advanced usage with custom parameters
+# Advanced usage with custom parameters and surface-level extraction
+python src/example_lstm_workflow.py \
+    --start-date 20240101 \
+    --end-date 20240131 \
+    --lake lsofs \
+    --variable temp \
+    --surface-level \
+    --sequence-length 48 \
+    --lstm-units 64 64 32 \
+    --epochs 150 \
+    --batch-size 64 \
+    --output-dir ../output/lsofs_experiment
+
+# Using 2D variable (water surface elevation) - no need for --surface-level
 python src/example_lstm_workflow.py \
     --start-date 20240101 \
     --end-date 20240131 \
@@ -140,20 +154,88 @@ python src/example_lstm_workflow.py \
     --sequence-length 48 \
     --lstm-units 64 64 32 \
     --epochs 150 \
-    --batch-size 64 \
-    --output-dir ../output/lsofs_experiment
+    --batch-size 64
 ```
 
 ## Available Lake Variables
 
-Common variables in GLOFS NetCDF files:
+### Variable Types and Dimensions
 
-- `temp` - Water temperature (°C)
-- `salinity` - Salinity (PSU)
-- `zeta` - Water surface elevation (m)
-- `u` - Eastward water velocity (m/s)
-- `v` - Northward water velocity (m/s)
-- `ww` - Vertical water velocity (m/s)
+GLOFS NetCDF files contain two types of variables based on their dimensionality:
+
+#### 3D Variables (Time × Vertical Layer × Spatial Location)
+These variables have vertical structure representing the water column from surface to bottom:
+
+- `temp` - Water temperature (°C) - **dimensions: (time, siglay, node)**
+- `salinity` - Salinity (PSU) - **dimensions: (time, siglay, node)**
+- `u` - Eastward water velocity (m/s) - **dimensions: (time, siglay, node)**
+- `v` - Northward water velocity (m/s) - **dimensions: (time, siglay, node)**
+- `ww` - Vertical water velocity (m/s) - **dimensions: (time, siglay, node)**
+
+Where:
+- `siglay` is the sigma layer coordinate (vertical levels in the water column)
+- `node` is the spatial location (horizontal position)
+- Layer 0 (`siglay=0`) represents the **surface** layer
+- Higher layer indices represent deeper water
+
+#### 2D Variables (Time × Spatial Location)
+These variables have no vertical dimension (surface-only or depth-integrated):
+
+- `zeta` - Water surface elevation (m) - **dimensions: (time, node)**
+- `ua` - Depth-averaged eastward velocity (m/s) - **dimensions: (time, node)**
+- `va` - Depth-averaged northward velocity (m/s) - **dimensions: (time, node)**
+
+### Extracting Data for LSTM Models
+
+**For 2D LSTM models, you need surface-level (2D) data.** Here's how to extract it:
+
+#### Surface Temperature (Recommended for LSTM)
+
+```python
+from src.lake_data_preprocessor import GLOFSDataPreprocessor
+
+preprocessor = GLOFSDataPreprocessor(data_dir="../downloads")
+
+# Method 1: Use the convenience method
+df = preprocessor.extract_surface_temperature(lake="leofs", aggregation="mean")
+
+# Method 2: Specify vertical_level=0 explicitly
+df = preprocessor.extract_variable_timeseries(
+    lake="leofs",
+    variable="temp",
+    vertical_level=0,  # 0 = surface layer
+    aggregation="mean"
+)
+
+# Method 3: Use "surface" aggregation
+df = preprocessor.extract_variable_timeseries(
+    lake="leofs",
+    variable="temp",
+    aggregation="surface"  # Automatically uses vertical_level=0
+)
+```
+
+#### Depth-Averaged Temperature (Alternative)
+
+```python
+# Average across all vertical levels (full water column)
+df = preprocessor.extract_variable_timeseries(
+    lake="leofs",
+    variable="temp",
+    aggregation="mean"  # Averages spatially AND vertically
+)
+```
+
+#### 2D Variables (No Vertical Dimension)
+
+```python
+# 2D variables don't need vertical_level parameter
+df = preprocessor.extract_variable_timeseries(
+    lake="leofs",
+    variable="zeta",  # Water surface elevation
+    aggregation="mean"
+)
+```
 
 Use the `inspect_variables()` function to see all available variables in your downloaded files.
 
@@ -173,6 +255,54 @@ GLOFS/
     └── fetch_glofs.py                # Original NCEI fetcher
 ```
 
+## Understanding 3D Lakes and 2D LSTM Models
+
+### The Challenge
+
+The Great Lakes are **3-dimensional systems** with:
+- Horizontal extent (latitude/longitude)
+- Vertical structure (surface to bottom depth)
+- Temporal variation
+
+However, **LSTM models for time series forecasting** typically work with:
+- Time series data (temporal dimension)
+- Feature vectors (multiple variables at each time step)
+
+### The Solution
+
+To train 2D LSTM models on 3D lake data, we **extract surface-level variables** because:
+
+1. **Surface conditions are most relevant** for:
+   - Weather interactions
+   - Ice formation predictions
+   - Navigation safety
+   - Ecological monitoring
+
+2. **Surface data is simpler** and requires less computational resources
+
+3. **Surface temperature** strongly correlates with many important lake processes
+
+### LSTM Variables Being Written
+
+When you train an LSTM model using this codebase, the following variables are extracted and can be used:
+
+| Variable | Type | LSTM Input | Description |
+|----------|------|------------|-------------|
+| `temp` (surface) | 3D→2D | ✅ Recommended | Surface water temperature (vertical_level=0) |
+| `temp` (depth-avg) | 3D→2D | ⚠️ Alternative | Depth-averaged temperature (all levels) |
+| `salinity` (surface) | 3D→2D | ✅ Usable | Surface salinity (vertical_level=0) |
+| `u` (surface) | 3D→2D | ✅ Usable | Surface eastward velocity (vertical_level=0) |
+| `v` (surface) | 3D→2D | ✅ Usable | Surface northward velocity (vertical_level=0) |
+| `zeta` | 2D | ✅ Recommended | Water surface elevation (no vertical dim) |
+| `ua` | 2D | ✅ Usable | Depth-averaged eastward velocity |
+| `va` | 2D | ✅ Usable | Depth-averaged northward velocity |
+
+**Key Points:**
+- **Always specify `vertical_level=0`** when extracting 3D variables for LSTM
+- **Use the `extract_surface_temperature()` method** for surface temperature
+- **2D variables** (zeta, ua, va) don't need vertical level specification
+- The extracted data is then **spatially aggregated** (mean/max/min) to create a single time series
+
 ## Data Sources
 
 - **AWS S3 Bucket**: `s3://noaa-nos-ofs-pds/` (public, no credentials required)
@@ -185,7 +315,7 @@ The LSTM model supports:
 - Multiple LSTM layers with configurable units
 - Dropout for regularization
 - Flexible sequence length for input
-- Multi-variable input features
+- Multi-variable input features (surface temperature, water level, velocities, etc.)
 - Single-step ahead prediction
 - Early stopping to prevent overfitting
 - Model checkpointing to save best weights
@@ -204,7 +334,85 @@ When running the complete workflow, the following files are generated:
 
 ## Examples
 
-### Example 1: Quick Test with Minimal Data
+### Example 1: Surface Temperature Time Series (Recommended for LSTM)
+
+```python
+from src.lake_data_preprocessor import GLOFSDataPreprocessor
+
+preprocessor = GLOFSDataPreprocessor()
+
+# Extract surface temperature (most common for LSTM)
+df_surface = preprocessor.extract_surface_temperature(
+    lake="leofs",
+    aggregation="mean"
+)
+print(f"Surface temperature time series: {len(df_surface)} time steps")
+
+# Or equivalently, using vertical_level parameter
+df_surface = preprocessor.extract_variable_timeseries(
+    lake="leofs",
+    variable="temp",
+    vertical_level=0,  # Surface layer
+    aggregation="mean"
+)
+```
+
+### Example 2: Multiple Surface Variables for LSTM
+
+```python
+# Extract multiple surface-level variables
+df_multi = preprocessor.extract_multiple_variables(
+    lake="leofs",
+    variables=["temp", "u", "v"],  # Surface temp and currents
+    vertical_level=0,  # Surface layer for all 3D variables
+    aggregation="mean"
+)
+
+# Prepare for LSTM with multiple input features
+data_dict = preprocessor.prepare_lstm_data(
+    df=df_multi,
+    target_variable="temp",
+    feature_variables=["temp", "u", "v"],
+    sequence_length=24
+)
+
+# Train model
+from src.lake_lstm_model import train_lstm_model
+model, metrics = train_lstm_model(data_dict, epochs=100)
+```
+
+### Example 3: Surface vs Depth-Averaged Comparison
+
+```python
+# Surface temperature (recommended)
+df_surface = preprocessor.extract_variable_timeseries(
+    lake="leofs",
+    variable="temp",
+    vertical_level=0,  # Surface only
+    aggregation="mean"
+)
+
+# Depth-averaged temperature (alternative)
+df_depth_avg = preprocessor.extract_variable_timeseries(
+    lake="leofs",
+    variable="temp",
+    # No vertical_level specified - averages all layers
+    aggregation="mean"
+)
+
+# Compare the two
+import matplotlib.pyplot as plt
+plt.figure(figsize=(12, 6))
+plt.plot(df_surface['timestamp'], df_surface['temp'], label='Surface Temperature')
+plt.plot(df_depth_avg['timestamp'], df_depth_avg['temp'], label='Depth-Averaged Temperature')
+plt.legend()
+plt.xlabel('Time')
+plt.ylabel('Temperature (°C)')
+plt.title('Surface vs Depth-Averaged Temperature')
+plt.show()
+```
+
+### Example 4: Quick Test with Minimal Data
 
 ```bash
 # Fetch 3 days and train with reduced epochs
@@ -216,7 +424,7 @@ python src/example_lstm_workflow.py \
     --epochs 20
 ```
 
-### Example 2: Production Training
+### Example 5: Production Training
 
 ```bash
 # Fetch 30 days and train comprehensive model
@@ -231,31 +439,6 @@ python src/example_lstm_workflow.py \
     --batch-size 64
 ```
 
-### Example 3: Multiple Variables
-
-```python
-from src.lake_data_preprocessor import GLOFSDataPreprocessor
-
-# Extract multiple variables
-preprocessor = GLOFSDataPreprocessor()
-df = preprocessor.extract_multiple_variables(
-    lake="leofs",
-    variables=["temp", "zeta", "u", "v"]
-)
-
-# Prepare for LSTM with multiple input features
-data_dict = preprocessor.prepare_lstm_data(
-    df=df,
-    target_variable="temp",
-    feature_variables=["temp", "zeta", "u", "v"],
-    sequence_length=24
-)
-
-# Train model
-from src.lake_lstm_model import train_lstm_model
-model, metrics = train_lstm_model(data_dict, epochs=100)
-```
-
 ## Tips
 
 1. **Data Volume**: Each NetCDF file is typically 10-50 MB. Plan storage accordingly.
@@ -263,6 +446,8 @@ model, metrics = train_lstm_model(data_dict, epochs=100)
 3. **Sequence Length**: Typical values are 24 (1 day), 48 (2 days), or 168 (1 week).
 4. **Training Time**: GPU is recommended for training. CPU training may take significantly longer.
 5. **Memory**: Large datasets may require significant RAM. Consider processing in chunks if needed.
+6. **Surface vs Depth Data**: For LSTM models, always use `vertical_level=0` or the `extract_surface_temperature()` method to get surface-level data from 3D variables.
+7. **Variable Selection**: Mix 2D variables (zeta) and surface-level 3D variables (temp with vertical_level=0) as needed for your LSTM model.
 
 ## Troubleshooting
 
