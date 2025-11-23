@@ -5,11 +5,11 @@ import requests
 
 
 # Define start and end
-start_date_str = "20221117"
-start_hour = 18
+start_date_str = "20250609"
+start_hour = 12
 
-end_date_str = "20221120"
-end_hour = 18
+end_date_str = "20250612"
+end_hour = 12
 
 
 start_dt = datetime.strptime(start_date_str + f"{start_hour:02d}", "%Y%m%d%H")
@@ -24,6 +24,7 @@ https://noaa-mrms-pds.s3.amazonaws.com/CONUS/MergedReflectivityComposite_00.50/2
 NLDN_CG_030min_AvgDensity_00.00/
 https://noaa-mrms-pds.s3.amazonaws.com/CONUS/NLDN_CG_030min_AvgDensity_00.00/20201120/MRMS_NLDN_CG_030min_AvgDensity_00.00_20201120-232413.grib2.gz
 
+https://noaa-mrms-pds.s3.amazonaws.com/CONUS/MergedReflectivityComposite_00.50/20250610/MRMS_MergedReflectivityComposite_00.50_20250610-000045.grib2.gz
 '''
 
 
@@ -37,7 +38,7 @@ while curr_dt <= end_dt:
     yymmdd = curr_dt.strftime("%y%m%d")
     hour = curr_dt.strftime("%H")
     base_url = f"https://noaa-mrms-pds.s3.amazonaws.com/CONUS/MergedReflectivityComposite_00.50/{ymd}/"
-    prefix = f"MRMS_MergedReflectivityComposite_00.50_{yymmdd2}-{hour}00"
+    prefix = f"MRMS_MergedReflectivityComposite_00.50_{ymd}-{hour}00"
     # Step 1: Get HTML page
     response = requests.get(base_url)
     # Step 2: Search for matching file
@@ -46,7 +47,8 @@ while curr_dt <= end_dt:
 
     for key_tag in soup.find_all('Key'):
         key = key_tag.text
-        print(key)
+        #print(key)
+        #print(f"CONUS/MergedReflectivityComposite_00.50/{ymd}/{prefix}")
         if key.startswith(f"CONUS/MergedReflectivityComposite_00.50/{ymd}/{prefix}"):
             file_url = f"https://noaa-mrms-pds.s3.amazonaws.com/{key}"
             break

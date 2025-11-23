@@ -5,10 +5,10 @@ import os
 from datetime import datetime, timedelta
 
 # Define start 
-start_date_str = "20241231"
+start_date_str = "20250902"
 start_hour = 18
 
-end_date_str = "20250103"
+end_date_str = "20250905"
 end_hour = 18
 
 

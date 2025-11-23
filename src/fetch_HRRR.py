@@ -1,6 +1,3 @@
-#Program to fetch URMA data from AWS server
-
-
 import os
 from datetime import datetime, timedelta
 
@@ -11,32 +8,38 @@ start_hour = 18
 end_date_str = "20250905"
 end_hour = 18
 
+'''
+https://noaa-hrrr-bdp-pds.s3.amazonaws.com/index.html#hrrr.20240106/conus/
+# For the pressure level file (atmosphere)
+hrrr.t{hour}z.wrfprsf00.grib2
 
+# For the surface file
+hrrr.t{hour}z.wrfsfcf00.grib2
+'''
 start_dt = datetime.strptime(start_date_str + f"{start_hour:02d}", "%Y%m%d%H")
 end_dt = datetime.strptime(end_date_str + f"{end_hour:02d}", "%Y%m%d%H")
 
 yymmdd2 = start_dt.strftime("%y%m%d")
-base_url = "https://noaa-urma-pds.s3.amazonaws.com"
-output_dir = "../../URMA"
 
-'''
-https://noaa-urma-pds.s3.amazonaws.com/urma2p5.20250215/urma2p5.t00z.2dvarges_ndfd.grb2_wexp
-urma2p5.2025021602.pcp_01h.wexp.grb2
-'''
-
+base_url = "https://noaa-hrrr-bdp-pds.s3.amazonaws.com"
+output_dir = "../hrrr_downloads"
 os.makedirs(output_dir, exist_ok=True)
 
 curr_dt = start_dt
+cycl = 0
 while curr_dt <= end_dt:
     ymd = curr_dt.strftime("%Y%m%d")
     yymmdd = curr_dt.strftime("%y%m%d")
     hour = curr_dt.strftime("%H")
-    day_url = f"urma2p5.{ymd}"
-    filename = f"urma2p5.{ymd}{hour}.pcp_01h.wexp.grb2"
+    filename = f"hrrr.t{hour}z.wrfprsf00.grib2"
+    file_url = f"{base_url}/hrrr.{ymd}/conus/{filename}"
     local_path = os.path.join(output_dir, filename)
-    file_url = f"{base_url}/{day_url}/{filename}"
-    new_filename = f"urma2p5.{yymmdd}.t{hour}z.pcp_01h.wexp.grb2"
-    new_path = os.path.join(output_dir, new_filename)  
+
+    # Rename format: yymmdd + hour + 000000
+    new_filename = f"{yymmdd2}{start_hour:02d}{cycl:02d}0000"
+    cycl = cycl + 1
+    new_path = os.path.join(output_dir, new_filename)
+
     # Download only if not already downloaded
     if os.path.exists(new_path):
         print(f"Already exists: {new_filename}")
@@ -53,7 +56,4 @@ while curr_dt <= end_dt:
 
     # Increment by 1 hour
     curr_dt += timedelta(hours=1)
-
-
-
 
