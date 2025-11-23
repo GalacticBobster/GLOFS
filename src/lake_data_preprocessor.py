@@ -88,6 +88,203 @@ class GLOFSDataPreprocessor:
         ds.close()
         return var_info
     
+    def get_node_coordinates(self, file_path: str) -> Dict:
+        """
+        Get node coordinates (latitude and longitude) from a NetCDF file.
+        
+        Args:
+            file_path: Path to NetCDF file
+            
+        Returns:
+            Dictionary with 'lat', 'lon', and 'num_nodes' information
+        """
+        ds = self.load_netcdf(file_path)
+        if ds is None:
+            return {}
+        
+        coord_info = {}
+        
+        # Try to extract lat/lon coordinates
+        # FVCOM uses 'lat' and 'lon' for node coordinates
+        if 'lat' in ds.variables and 'lon' in ds.variables:
+            lat = ds['lat'].values
+            lon = ds['lon'].values
+            coord_info = {
+                'lat': lat,
+                'lon': lon,
+                'num_nodes': len(lat),
+                'lat_min': float(np.min(lat)),
+                'lat_max': float(np.max(lat)),
+                'lon_min': float(np.min(lon)),
+                'lon_max': float(np.max(lon))
+            }
+        else:
+            print("Warning: 'lat' and 'lon' variables not found in file")
+        
+        ds.close()
+        return coord_info
+    
+    def inspect_nodes(self, lake: str, output_format: str = "summary") -> Dict:
+        """
+        Inspect node coordinates for a lake.
+        
+        Args:
+            lake: Lake name (e.g., "leofs")
+            output_format: Output format - "summary" for basic info, 
+                          "full" for complete coordinate arrays
+            
+        Returns:
+            Dictionary with node coordinate information
+        """
+        files = self.list_files(lake=lake)
+        
+        if not files:
+            print(f"No files found for lake {lake}")
+            return {}
+        
+        # Use first file to get coordinate information
+        # (coordinates are the same across all files for a given lake)
+        coord_info = self.get_node_coordinates(files[0])
+        
+        if not coord_info:
+            return {}
+        
+        result = {
+            'lake': lake,
+            'num_nodes': coord_info['num_nodes'],
+            'latitude_range': (coord_info['lat_min'], coord_info['lat_max']),
+            'longitude_range': (coord_info['lon_min'], coord_info['lon_max']),
+            'source_file': files[0]
+        }
+        
+        if output_format == "full":
+            result['lat'] = coord_info['lat']
+            result['lon'] = coord_info['lon']
+        
+        return result
+    
+    def find_nodes_in_region(self, lake: str, lat_min: float, lat_max: float,
+                            lon_min: float, lon_max: float) -> Dict:
+        """
+        Find nodes within a geographic region.
+        
+        Args:
+            lake: Lake name (e.g., "leofs")
+            lat_min: Minimum latitude
+            lat_max: Maximum latitude
+            lon_min: Minimum longitude
+            lon_max: Maximum longitude
+            
+        Returns:
+            Dictionary with node indices and coordinates in the region
+        """
+        files = self.list_files(lake=lake)
+        
+        if not files:
+            print(f"No files found for lake {lake}")
+            return {}
+        
+        coord_info = self.get_node_coordinates(files[0])
+        
+        if not coord_info:
+            return {}
+        
+        lat = coord_info['lat']
+        lon = coord_info['lon']
+        
+        # Find nodes in the specified region
+        # Filter out NaN values to avoid issues with comparison
+        valid_coords = np.isfinite(lat) & np.isfinite(lon)
+        mask = valid_coords & (lat >= lat_min) & (lat <= lat_max) & (lon >= lon_min) & (lon <= lon_max)
+        node_indices = np.where(mask)[0]
+        
+        result = {
+            'lake': lake,
+            'region': {
+                'lat_range': (lat_min, lat_max),
+                'lon_range': (lon_min, lon_max)
+            },
+            'num_nodes_in_region': len(node_indices),
+            'node_indices': node_indices.tolist(),
+            'node_coordinates': [
+                {'node_index': int(idx), 'lat': float(lat[idx]), 'lon': float(lon[idx])}
+                for idx in node_indices
+            ]
+        }
+        
+        return result
+    
+    def get_node_info(self, lake: str, node_index: int, 
+                     include_sample_data: bool = False) -> Dict:
+        """
+        Get detailed information about a specific node.
+        
+        Args:
+            lake: Lake name (e.g., "leofs")
+            node_index: Index of the node to inspect
+            include_sample_data: If True, include sample data values from first file
+            
+        Returns:
+            Dictionary with node information including coordinates and optionally data
+        """
+        files = self.list_files(lake=lake)
+        
+        if not files:
+            print(f"No files found for lake {lake}")
+            return {}
+        
+        # Get coordinates
+        coord_info = self.get_node_coordinates(files[0])
+        
+        if not coord_info:
+            return {}
+        
+        if node_index >= coord_info['num_nodes'] or node_index < 0:
+            print(f"Error: Node index {node_index} out of range (0-{coord_info['num_nodes']-1})")
+            return {}
+        
+        lat = coord_info['lat']
+        lon = coord_info['lon']
+        
+        result = {
+            'lake': lake,
+            'node_index': node_index,
+            'latitude': float(lat[node_index]),
+            'longitude': float(lon[node_index])
+        }
+        
+        # Optionally include sample data from first file
+        if include_sample_data:
+            ds = self.load_netcdf(files[0])
+            if ds is not None:
+                sample_data = {}
+                # Try to get values for common 2D variables
+                for var_name in ['zeta', 'ua', 'va']:
+                    if var_name in ds.variables:
+                        var_data = ds[var_name].values
+                        # Check dimensions
+                        if len(var_data.shape) >= 1 and var_data.shape[-1] > node_index:
+                            # Get first time step if time dimension exists
+                            if len(var_data.shape) == 2:
+                                sample_data[var_name] = float(var_data[0, node_index])
+                            elif len(var_data.shape) == 1:
+                                sample_data[var_name] = float(var_data[node_index])
+                
+                # Try to get surface values for 3D variables
+                for var_name in ['temp', 'salinity', 'u', 'v']:
+                    if var_name in ds.variables:
+                        var_data = ds[var_name].values
+                        # For 3D variables: (time, siglay, node)
+                        if len(var_data.shape) == 3 and var_data.shape[2] > node_index:
+                            # Get first time step, surface layer (index 0)
+                            sample_data[var_name + '_surface'] = float(var_data[0, 0, node_index])
+                
+                result['sample_data'] = sample_data
+                result['sample_data_source'] = files[0]
+                ds.close()
+        
+        return result
+    
     def extract_variable_timeseries(self, lake: str, variable: str,
                                    location: Optional[Tuple[int, int]] = None,
                                    aggregation: str = "mean",
@@ -414,6 +611,46 @@ def main():
         print("\nAvailable variables:")
         for var_name, info in var_info.items():
             print(f"  {var_name}: {info['shape']}")
+        
+        # NEW: Inspect node coordinates
+        print("\n" + "="*60)
+        print("Node Coordinate Inspection")
+        print("="*60)
+        
+        # Get node coordinate summary
+        print("\nNode coordinate summary:")
+        node_summary = preprocessor.inspect_nodes(lake="leofs", output_format="summary")
+        if node_summary:
+            print(f"  Lake: {node_summary['lake']}")
+            print(f"  Total nodes: {node_summary['num_nodes']}")
+            print(f"  Latitude range: {node_summary['latitude_range'][0]:.4f} to {node_summary['latitude_range'][1]:.4f}")
+            print(f"  Longitude range: {node_summary['longitude_range'][0]:.4f} to {node_summary['longitude_range'][1]:.4f}")
+        
+        # Get info for a specific node
+        print("\nInspecting node #100:")
+        node_info = preprocessor.get_node_info(lake="leofs", node_index=100, include_sample_data=True)
+        if node_info:
+            print(f"  Node index: {node_info['node_index']}")
+            print(f"  Latitude: {node_info['latitude']:.4f}")
+            print(f"  Longitude: {node_info['longitude']:.4f}")
+            if 'sample_data' in node_info and node_info['sample_data']:
+                print(f"  Sample data from first file:")
+                for var, val in node_info['sample_data'].items():
+                    print(f"    {var}: {val:.4f}")
+        
+        # Find nodes in a region (example: central Lake Erie)
+        print("\nFinding nodes in a sample region (41.5°N-42.5°N, -81.5°W to -80.5°W):")
+        region_nodes = preprocessor.find_nodes_in_region(
+            lake="leofs",
+            lat_min=41.5, lat_max=42.5,
+            lon_min=-81.5, lon_max=-80.5
+        )
+        if region_nodes:
+            print(f"  Found {region_nodes['num_nodes_in_region']} nodes in region")
+            if region_nodes['num_nodes_in_region'] > 0:
+                print(f"  First few nodes:")
+                for node in region_nodes['node_coordinates'][:5]:
+                    print(f"    Node {node['node_index']}: lat={node['lat']:.4f}, lon={node['lon']:.4f}")
 
 
 if __name__ == "__main__":
