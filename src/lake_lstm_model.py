@@ -359,11 +359,22 @@ def train_lstm_model(data_dict: Dict,
     print(f"\nModel Summary:")
     model.model.summary()
     
+    # Split training data into train and validation (80/20 split of training data)
+    val_split_idx = int(len(X_train) * 0.8)
+    X_train_final = X_train[:val_split_idx]
+    y_train_final = y_train[:val_split_idx]
+    X_val = X_train[val_split_idx:]
+    y_val = y_train[val_split_idx:]
+    
     # Train model
     print(f"\nTraining model...")
+    print(f"Training samples: {len(X_train_final)}")
+    print(f"Validation samples: {len(X_val)}")
+    print(f"Test samples: {len(X_test)}")
+    
     history = model.train(
-        X_train, y_train,
-        X_val=X_test, y_val=y_test,
+        X_train_final, y_train_final,
+        X_val=X_val, y_val=y_val,
         epochs=epochs,
         batch_size=batch_size,
         early_stopping_patience=early_stopping_patience,
@@ -371,7 +382,7 @@ def train_lstm_model(data_dict: Dict,
     )
     
     # Evaluate model
-    print(f"\nEvaluating model...")
+    print(f"\nEvaluating model on test set...")
     metrics = model.evaluate(X_test, y_test)
     print(f"\nTest Metrics:")
     for key, value in metrics.items():

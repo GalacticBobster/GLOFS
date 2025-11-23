@@ -52,7 +52,7 @@ class GLOFSMultiDayFetcher:
             current_date += timedelta(days=1)
         return dates
     
-    def download_file(self, lake: str, date: datetime, cycle: str, step: int) -> bool:
+    def download_file(self, lake: str, date: datetime, cycle: str, step: int) -> str:
         """
         Download a single file from S3.
         
@@ -63,7 +63,7 @@ class GLOFSMultiDayFetcher:
             step: Forecast step (0-5)
             
         Returns:
-            True if successful, False otherwise
+            'success' if downloaded, 'exists' if already exists, 'failed' if failed
         """
         year = date.strftime("%Y")
         mon = date.strftime("%m")
@@ -79,16 +79,16 @@ class GLOFSMultiDayFetcher:
         # Skip if file already exists
         if os.path.exists(local_path):
             print(f"  → Already exists: {fname}")
-            return True
+            return "exists"
         
         print(f"Downloading s3://{self.bucket}/{key} → {local_path}")
         try:
             self.s3.download_file(self.bucket, key, local_path)
             print("  → Success")
-            return True
+            return "success"
         except Exception as e:
             print(f"  → Failed: {e}")
-            return False
+            return "failed"
     
     def fetch_lake_data(self, lake: str, start_date: datetime, end_date: datetime,
                        cycles: Optional[List[str]] = None,
@@ -129,17 +129,12 @@ class GLOFSMultiDayFetcher:
             for cycle in cycles:
                 for step in forecast_steps:
                     stats["total"] += 1
-                    success = self.download_file(lake, date, cycle, step)
-                    if success:
-                        if os.path.exists(os.path.join(
-                            self.download_dir, 
-                            f"{lake}.{cycle}.{date.strftime('%Y%m%d')}.fields.n{step:03d}.nc"
-                        )):
-                            if "Already exists" in str(success):
-                                stats["skipped"] += 1
-                            else:
-                                stats["success"] += 1
-                    else:
+                    result = self.download_file(lake, date, cycle, step)
+                    if result == "success":
+                        stats["success"] += 1
+                    elif result == "exists":
+                        stats["skipped"] += 1
+                    else:  # "failed"
                         stats["failed"] += 1
         
         return stats

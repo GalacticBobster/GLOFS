@@ -98,11 +98,19 @@ class GLOFSDataPreprocessor:
             lake: Lake name (e.g., "leofs")
             variable: Variable name (e.g., "temp", "zeta", "u", "v")
             location: Optional (x, y) location indices for spatial extraction
-            aggregation: Aggregation method if location not specified ("mean", "max", "min")
+            aggregation: Aggregation method if location not specified ("mean", "max", "min").
+                        For location-based extraction with multiple vertical levels, use "first" 
+                        to take the first level or "mean" to average across levels.
             
         Returns:
             DataFrame with time series data
         """
+        # Validate aggregation parameter
+        valid_aggregations = ["mean", "max", "min", "first"]
+        if aggregation not in valid_aggregations:
+            print(f"Warning: Invalid aggregation '{aggregation}'. Using 'mean' instead.")
+            aggregation = "mean"
+        
         files = self.list_files(lake=lake)
         
         if not files:
@@ -143,6 +151,7 @@ class GLOFSDataPreprocessor:
                     if len(var_data.shape) >= 2:
                         value = var_data[..., location[0], location[1]]
                         if len(value.shape) > 0:
+                            # Handle multiple vertical levels
                             value = value[0] if aggregation == "first" else np.mean(value)
                     else:
                         value = var_data
@@ -155,6 +164,7 @@ class GLOFSDataPreprocessor:
                     elif aggregation == "min":
                         value = np.nanmin(var_data)
                     else:
+                        # Should not reach here due to validation above
                         value = np.nanmean(var_data)
                 
                 data.append(value)
@@ -239,7 +249,8 @@ class GLOFSDataPreprocessor:
         
         # Add target to features if not already there
         all_features = feature_variables + [target_variable]
-        all_features = list(dict.fromkeys(all_features))  # Remove duplicates
+        # Remove duplicates while preserving order (dict.fromkeys maintains insertion order in Python 3.7+)
+        all_features = list(dict.fromkeys(all_features))
         
         # Extract data
         data = df[all_features].values
